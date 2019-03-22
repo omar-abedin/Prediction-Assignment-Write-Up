@@ -1,0 +1,151 @@
+Coursera Machine Learning Project
+Omar Abedin
+March 14, 2019
+Introduction & Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+Data
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+What we need to submit
+The goal of the project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. We can use any of the other variables to predict with. Create a report describing how we built your model, how we used cross validation, what we think the expected out of sample error is, and why we made the choices we did. We will also use your prediction model to predict 20 different test cases.
+1.	Our submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+2.	We should also apply our machine learning algorithm to the 20 test cases available in the test data above. We will submit our predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details.
+
+Analysis
+Summary of approach
+1.	Load the data set and briefly learn the characteristics of the data
+2.	Use cross-validation method to built a valid model; 70% of the original data is used for model building (training data) while the rest of 30% of the data is used for testing (testing data)
+3.	Since the number of variables in the training data is too large, clean the data by 1) excluding variables which apparently cannot be explanatory variables, and 2) reducing variables with little information.
+4.	Apply PCA to reduce the number of variables
+5.	Apply random forest method to build a model
+6.	Check the model with the testing data set
+7.	Apply the model to estimate classes of 20 observations
+Loading data
+data <- read.csv("pml-training.csv")
+colnames(data)
+summary(data)
+Cross validation
+use 70% of training set data to built a model, and use the rest to test the model
+library(caret)
+## Loading required package: lattice
+## Loading required package: ggplot2
+set.seed(1111)
+train <- createDataPartition(y=data$classe,p=.70,list=F)
+training <- data[train,]
+testing <- data[-train,]
+Cleaning the training data
+#exclude identifier, timestamp, and window data (they cannot be used for prediction)
+Cl <- grep("name|timestamp|window|X", colnames(training), value=F) 
+trainingCl <- training[,-Cl]
+#select variables with high (over 95%) missing data --> exclude them from the analysis
+trainingCl[trainingCl==""] <- NA
+NArate <- apply(trainingCl, 2, function(x) sum(is.na(x)))/nrow(trainingCl)
+trainingCl <- trainingCl[!(NArate>0.95)]
+summary(trainingCl)
+PCA
+Since the number of variables are still over 50, PCA is applied
+preProc <- preProcess(trainingCl[,1:52],method="pca",thresh=.8) #12 components are required
+preProc <- preProcess(trainingCl[,1:52],method="pca",thresh=.9) #18 components are required
+preProc <- preProcess(trainingCl[,1:52],method="pca",thresh=.95) #25 components are required
+
+preProc <- preProcess(trainingCl[,1:52],method="pca",pcaComp=25) 
+preProc$rotation
+trainingPC <- predict(preProc,trainingCl[,1:52])
+Random forest
+Apply ramdom forest method (non-bionominal outcome & large sample size)
+library(randomForest)
+## randomForest 4.6-10
+## Type rfNews() to see new features/changes/bug fixes.
+modFitRF <- randomForest(trainingCl$classe ~ .,   data=trainingPC, do.trace=F)
+print(modFitRF) # view results 
+## 
+## Call:
+##  randomForest(formula = trainingCl$classe ~ ., data = trainingPC,      do.trace = F) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 5
+## 
+##         OOB estimate of  error rate: 2.59%
+## Confusion matrix:
+##      A    B    C    D    E class.error
+## A 3876    9   13    5    3 0.007680492
+## B   44 2571   34    2    7 0.032731377
+## C    5   38 2326   24    3 0.029215359
+## D    7    6  104 2130    5 0.054174067
+## E    1    8   21   17 2478 0.018613861
+importance(modFitRF) # importance of each predictor
+##      MeanDecreaseGini
+## PC1          572.3609
+## PC2          458.8458
+## PC3          501.5873
+## PC4          365.8816
+## PC5          556.7810
+## PC6          430.9262
+## PC7          402.8629
+## PC8          705.3515
+## PC9          505.6043
+## PC10         396.0036
+## PC11         339.7100
+## PC12         582.3393
+## PC13         346.2943
+## PC14         653.4349
+## PC15         468.9175
+## PC16         441.0693
+## PC17         444.8101
+## PC18         284.7219
+## PC19         347.1358
+## PC20         359.8680
+## PC21         410.1221
+## PC22         420.2179
+## PC23         249.5559
+## PC24         230.5189
+## PC25         385.3894
+Check with test set
+testingCl <- testing[,-Cl]
+testingCl[testingCl==""] <- NA
+NArate <- apply(testingCl, 2, function(x) sum(is.na(x)))/nrow(testingCl)
+testingCl <- testingCl[!(NArate>0.95)]
+testingPC <- predict(preProc,testingCl[,1:52])
+confusionMatrix(testingCl$classe,predict(modFitRF,testingPC))
+## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1660    2   10    2    0
+##          B   13 1098   18    2    8
+##          C    0   12 1000   12    2
+##          D    3    0   48  910    3
+##          E    0    1   11    7 1063
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9738          
+##                  95% CI : (0.9694, 0.9778)
+##     No Information Rate : 0.2848          
+##     P-Value [Acc > NIR] : < 2.2e-16       
+##                                           
+##                   Kappa : 0.9669          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9905   0.9865   0.9200   0.9753   0.9879
+## Specificity            0.9967   0.9914   0.9946   0.9891   0.9960
+## Pos Pred Value         0.9916   0.9640   0.9747   0.9440   0.9824
+## Neg Pred Value         0.9962   0.9968   0.9821   0.9953   0.9973
+## Prevalence             0.2848   0.1891   0.1847   0.1585   0.1828
+## Detection Rate         0.2821   0.1866   0.1699   0.1546   0.1806
+## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
+## Balanced Accuracy      0.9936   0.9890   0.9573   0.9822   0.9920
+Predict classes of 20 test data
+testdata <- read.csv("pml-testing.csv")
+testdataCl <- testdata[,-Cl]
+testdataCl[testdataCl==""] <- NA
+NArate <- apply(testdataCl, 2, function(x) sum(is.na(x)))/nrow(testdataCl)
+testdataCl <- testdataCl[!(NArate>0.95)]
+testdataPC <- predict(preProc,testdataCl[,1:52])
+testdataCl$classe <- predict(modFitRF,testdataPC)
+Discussion
+In this analyses, 19622 observations from weight lifting exercise were used to analyze and predict correct body movement from others during the exercise. 70% of the total observations (13737 observations) were used to build a model by random forest method, and the rest of 30% of the observations (5885 observations) were used for model validation (cross-validation). The model statistics showed that the built model had the overall accuracy of 97% for the testing set, which is not overlapping with observations used to built the model. The sensitivity was in between 92%-99% and the specificity was over 99% for all classes (class A-E, total 5 classes. class A is the data from correct exercise while the other classes were data from exercises done in a wrong way). Overall, the model is well developed to predict the exercise classes during weight lifting. As for the limitation in this study, the observation data used in the analyses was collected from 6 young health participants in an experiment using Microsoft Kinect. Therefore, under those condition, the model is expected to perform over 95% accuracy; however, with different conditions, such as experiments with elderly people and/or using different device, the model might not perform well as shown in the analysis.
